@@ -1,0 +1,64 @@
+-- Day5_SQL.txt
+-- BGT Campus - Mini-projekti final Day 5
+-- K2: SQL + RLS
+
+-- 1. Tabela events
+create table if not exists public.events (
+  id bigint generated always as identity primary key,
+  title text not null,
+  date text not null,
+  location text not null,
+  likes integer not null default 0,
+  created_at timestamptz not null default now(),
+  user_id uuid not null default auth.uid() references auth.users(id),
+  author text
+);
+
+-- Nëse tabela events ekziston nga ditët e kaluara, përdorni këto vetëm nëse mungojnë kolonat:
+-- alter table public.events add column if not exists user_id uuid references auth.users(id) default auth.uid();
+-- alter table public.events add column if not exists author text;
+-- alter table public.events add column if not exists created_at timestamptz not null default now();
+
+alter table public.events enable row level security;
+
+grant select on table public.events to anon, authenticated;
+grant insert, update, delete on table public.events to authenticated;
+
+-- Fshini policy-t e vjetra vetëm nëse po e rindërtoni databazën:
+drop policy if exists "Te gjithe lexojne" on public.events;
+drop policy if exists "I kycuri shton vetem si vetja" on public.events;
+drop policy if exists "Vetem pronari ndryshon" on public.events;
+drop policy if exists "Vetem pronari fshin" on public.events;
+
+-- SELECT: eventet mund të lexohen nga anon dhe authenticated
+create policy "Te gjithe lexojne"
+on public.events
+for select
+to anon, authenticated
+using (true);
+
+-- INSERT: përdoruesi i kyçur mund të shtojë vetëm si vetja
+create policy "I kycuri shton vetem si vetja"
+on public.events
+for insert
+to authenticated
+with check (auth.uid() = user_id);
+
+-- UPDATE: vetëm pronari
+create policy "Vetem pronari ndryshon"
+on public.events
+for update
+to authenticated
+using (auth.uid() = user_id)
+with check (auth.uid() = user_id);
+
+-- DELETE: vetëm pronari
+create policy "Vetem pronari fshin"
+on public.events
+for delete
+to authenticated
+using (auth.uid() = user_id);
+
+-- Shënim:
+-- user_id ka default auth.uid(), prandaj Flutter nuk ka nevojë ta dërgojë manualisht.
+-- RLS e mbron databazën edhe nëse dikush provon PATCH/DELETE nga jashtë app-it.
